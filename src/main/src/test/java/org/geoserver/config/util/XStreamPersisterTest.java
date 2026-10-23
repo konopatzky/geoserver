@@ -56,7 +56,9 @@ import org.geoserver.catalog.LayerGroupInfo.Mode;
 import org.geoserver.catalog.LayerInfo;
 import org.geoserver.catalog.MetadataMap;
 import org.geoserver.catalog.NamespaceInfo;
+import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.catalog.SLDHandler;
+import org.geoserver.catalog.StoreInfo;
 import org.geoserver.catalog.StyleInfo;
 import org.geoserver.catalog.WMSLayerInfo;
 import org.geoserver.catalog.WMSStoreInfo;
@@ -1682,6 +1684,48 @@ public class XStreamPersisterTest {
         persister.save(toTest, out);
         String result = new String(out.toByteArray());
         assertTrue(result.contains(message));
+    }
+
+    /**
+     * GEOS-12248: the REST API decodes request bodies with the XML or the JSON persister,
+     * so {@code enabled} must come out the same either way, whether it's missing, true or false
+     */
+    @Test
+    public void testEnabledSameForXMLAndJSON() throws Exception {
+        XStreamPersisterFactory xpf = new XStreamPersisterFactory();
+        List<String> elements = List.of(
+                "dataStore",
+                "coverageStore",
+                "wmsStore",
+                "wmtsStore",
+                "featureType",
+                "coverage",
+                "wmsLayer",
+                "wmtsLayer",
+                "layerGroup");
+        for (String element : elements) {
+            for (Boolean enabled : Arrays.asList(null, true, false)) {
+                String xml = "<" + element + "><name>foo</name>"
+                        + (enabled != null ? "<enabled>" + enabled + "</enabled>" : "")
+                        + "</" + element + ">";
+                String json = "{\"" + element + "\":{\"name\":\"foo\""
+                        + (enabled != null ? ",\"enabled\":" + enabled : "")
+                        + "}}";
+
+                Object fromXML = xpf.createXMLPersister().load(new ByteArrayInputStream(xml.getBytes()), Object.class);
+                Object fromJSON =
+                        xpf.createJSONPersister().load(new ByteArrayInputStream(json.getBytes()), Object.class);
+
+                assertEquals(element + ", enabled " + enabled, isEnabled(fromXML), isEnabled(fromJSON));
+            }
+        }
+    }
+
+    private static boolean isEnabled(Object info) {
+        if (info instanceof StoreInfo store) return store.isEnabled();
+        if (info instanceof ResourceInfo resource) return resource.isEnabled();
+        if (info instanceof LayerGroupInfo group) return group.isEnabled();
+        throw new IllegalArgumentException("Unexpected type " + info.getClass());
     }
 
     ByteArrayOutputStream out() {
