@@ -65,6 +65,9 @@ public class CoverageControllerTest extends CatalogRESTTestSupport {
         removeLayer("wcs", "enabledTrue");
         removeLayer("wcs", "enabledFalse");
         removeLayer("wcs", "enabledFalseWithSrs");
+        removeLayer("wcs", "advertisedMissing");
+        removeLayer("wcs", "advertisedTrue");
+        removeLayer("wcs", "advertisedFalse");
     }
 
     @Test
@@ -326,6 +329,38 @@ public class CoverageControllerTest extends CatalogRESTTestSupport {
     @Test // GEOS-12248, a body with more than the name is completed instead of built from scratch
     public void testPostAsXMLEnabledFalseWithSrs() throws Exception {
         assertEnabledAfterPost("enabledFalseWithSrs", "<enabled>false</enabled><srs>EPSG:4326</srs>", false);
+    }
+
+    // Regression guards for GEOS-12248: CoverageController.isNewCoverage() reads advertised and enabled together to
+    // tell a name-only POST (coverage built from scratch) from a partial one (posted coverage completed). Fixing how
+    // a missing enabled is read changes that check, and advertised must keep working the same way.
+
+    /** POSTs a new coverage with the given additional elements and checks the stored {@code advertised} */
+    private void assertAdvertisedAfterPost(String name, String elements, boolean expected) throws Exception {
+        assertEquals(201, postCoverageAsXML(name, elements).getStatus());
+
+        CoverageInfo resource = catalog.getCoverageByName("wcs", name);
+        assertNotNull(resource);
+        assertEquals("advertised", expected, resource.isAdvertised());
+
+        LayerInfo layer = catalog.getLayerByName("wcs:" + name);
+        assertNotNull(layer);
+        assertEquals("layer advertised", expected, layer.isAdvertised());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLAdvertisedMissing() throws Exception {
+        assertAdvertisedAfterPost("advertisedMissing", "", true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLAdvertisedTrue() throws Exception {
+        assertAdvertisedAfterPost("advertisedTrue", "<advertised>true</advertised>", true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLAdvertisedFalse() throws Exception {
+        assertAdvertisedAfterPost("advertisedFalse", "<advertised>false</advertised>", false);
     }
 
     @Test

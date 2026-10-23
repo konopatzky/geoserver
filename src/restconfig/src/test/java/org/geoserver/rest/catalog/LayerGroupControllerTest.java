@@ -70,6 +70,9 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         removeLayerGroup(null, "newLayerGroupWithTypeEO");
         removeLayerGroup(null, "newLayerGroupWithStyleGroup");
         removeLayerGroup(null, "doubleLayerGroup");
+        removeLayerGroup(null, "enabledMissing");
+        removeLayerGroup(null, "enabledTrue");
+        removeLayerGroup(null, "enabledFalse");
 
         LayerGroupInfo lg = catalog.getFactory().createLayerGroup();
         lg.setName("sfLayerGroup");
@@ -609,6 +612,48 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         assertEquals(2, lg.getStyles().size());
         assertNull(lg.getStyles().get(0));
         assertNull(lg.getStyles().get(1));
+    }
+
+    // Regression guards for GEOS-12248: layer groups already handle `enabled` as expected
+    // (a missing value is stored as null, which isEnabled() reads as true).
+
+    /** POSTs a new layer group of Ponds and Forests as XML, leaving out {@code enabled} if it's null */
+    private MockHttpServletResponse postLayerGroupAsXML(String name, Boolean enabled) throws Exception {
+        String xml = "<layerGroup>"
+                + "<name>"
+                + name
+                + "</name>"
+                + "<layers>"
+                + "<layer>Ponds</layer>"
+                + "<layer>Forests</layer>"
+                + "</layers>"
+                + (enabled != null ? "<enabled>" + enabled + "</enabled>" : "")
+                + "</layerGroup>";
+        return postAsServletResponse(RestBaseController.ROOT_PATH + "/layergroups", xml, "text/xml");
+    }
+
+    /** POSTs a new layer group with the given {@code enabled} and checks what the catalog stored */
+    private void assertEnabledAfterPost(String name, Boolean posted, boolean expected) throws Exception {
+        assertEquals(201, postLayerGroupAsXML(name, posted).getStatus());
+
+        LayerGroupInfo group = catalog.getLayerGroupByName(name);
+        assertNotNull(group);
+        assertEquals("enabled", expected, group.isEnabled());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledMissing() throws Exception {
+        assertEnabledAfterPost("enabledMissing", null, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledTrue() throws Exception {
+        assertEnabledAfterPost("enabledTrue", true, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledFalse() throws Exception {
+        assertEnabledAfterPost("enabledFalse", false, false);
     }
 
     @Test
