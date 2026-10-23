@@ -295,6 +295,48 @@ public class WMSLayerTest extends CatalogRESTTestSupport {
         assertEquals(405, response.getStatus());
     }
 
+    /** POSTs WMS layer bugsites of the demo store as XML, leaving out {@code enabled} if it's null */
+    private MockHttpServletResponse postWMSLayerAsXML(Boolean enabled) throws Exception {
+        String xml = "<wmsLayer>"
+                + "<name>bugsites</name>"
+                + "<nativeName>world4326</nativeName>"
+                + "<srs>EPSG:4326</srs>"
+                + "<nativeCRS>EPSG:4326</nativeCRS>"
+                + "<store>demo</store>"
+                + (enabled != null ? "<enabled>" + enabled + "</enabled>" : "")
+                + "</wmsLayer>";
+        return postAsServletResponse(
+                RestBaseController.ROOT_PATH + "/workspaces/sf/wmsstores/demo/wmslayers", xml, "text/xml");
+    }
+
+    /** POSTs WMS layer bugsites with the given {@code enabled} and checks what the catalog stored */
+    private void assertEnabledAfterPost(Boolean posted, boolean expected) throws Exception {
+        assertThat(postWMSLayerAsXML(posted), hasStatus(HttpStatus.CREATED));
+
+        WMSLayerInfo resource = catalog.getResourceByName("sf", "bugsites", WMSLayerInfo.class);
+        assertNotNull(resource);
+        assertEquals("enabled", expected, resource.isEnabled());
+
+        LayerInfo layer = catalog.getLayerByName(new NameImpl("sf", "bugsites"));
+        assertNotNull(layer);
+        assertEquals("layer enabled", expected, layer.enabled());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledMissing() throws Exception {
+        assertEnabledAfterPost(null, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledTrue() throws Exception {
+        assertEnabledAfterPost(true, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledFalse() throws Exception {
+        assertEnabledAfterPost(false, false);
+    }
+
     @Test
     public void testGetAsXML() throws Exception {
         MockHttpServletResponse response =

@@ -65,6 +65,13 @@ public class DataStoreControllerTest extends CatalogRESTTestSupport {
     }
 
     @Before
+    public void removeEnabledStores() {
+        removeStore("sf", "enabledMissing");
+        removeStore("sf", "enabledTrue");
+        removeStore("sf", "enabledFalse");
+    }
+
+    @Before
     public void addDataStores() throws IOException {
         removeStore("sf", "newDataStore"); // may have been created by other tests
         // the store configuration gets ruined by tests in more than one way, let's recreate it
@@ -331,6 +338,51 @@ public class DataStoreControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(ROOT_PATH + "/workspaces/sf/datastores/sf", xml, "text/xml");
         assertEquals(405, response.getStatus());
+    }
+
+    /** POSTs a new property data store as XML, leaving out {@code enabled} if it's null */
+    private MockHttpServletResponse postDataStoreAsXML(String name, Boolean enabled) throws Exception {
+        File dir = setupNewDataStore(name);
+        String xml = "<dataStore>"
+                + "<name>"
+                + name
+                + "</name>"
+                + "<connectionParameters>"
+                + "<namespace><string>sf</string></namespace>"
+                + "<directory>"
+                + "<string>"
+                + dir.getAbsolutePath()
+                + "</string>"
+                + "</directory>"
+                + "</connectionParameters>"
+                + "<workspace>sf</workspace>"
+                + (enabled != null ? "<enabled>" + enabled + "</enabled>" : "")
+                + "</dataStore>";
+        return postAsServletResponse(ROOT_PATH + "/workspaces/sf/datastores", xml, "text/xml");
+    }
+
+    /** POSTs a new data store with the given {@code enabled} and checks what the catalog stored */
+    private void assertEnabledAfterPost(String name, Boolean posted, boolean expected) throws Exception {
+        assertEquals(201, postDataStoreAsXML(name, posted).getStatus());
+
+        DataStoreInfo store = catalog.getDataStoreByName("sf", name);
+        assertNotNull(store);
+        assertEquals("enabled", expected, store.isEnabled());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledMissing() throws Exception {
+        assertEnabledAfterPost("enabledMissing", null, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledTrue() throws Exception {
+        assertEnabledAfterPost("enabledTrue", true, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledFalse() throws Exception {
+        assertEnabledAfterPost("enabledFalse", false, false);
     }
 
     @Test

@@ -312,6 +312,52 @@ public class WMTSLayerTest extends CatalogRESTTestSupport {
         assertEquals(405, response.getStatus());
     }
 
+    /** POSTs a new WMTS layer of the demo store as XML, leaving out {@code enabled} if it's null */
+    private MockHttpServletResponse postWMTSLayerAsXML(Boolean enabled) throws Exception {
+        String xml = "<wmtsLayer>"
+                + "<name>"
+                + ANOTHER_LOCAL_NAME
+                + "</name>"
+                + "<nativeName>"
+                + ANOTHER_LAYER_NAME
+                + "</nativeName>"
+                + "<srs>EPSG:4326</srs>"
+                + "<nativeCRS>EPSG:4326</nativeCRS>"
+                + "<store>demo</store>"
+                + (enabled != null ? "<enabled>" + enabled + "</enabled>" : "")
+                + "</wmtsLayer>";
+        return postAsServletResponse(
+                RestBaseController.ROOT_PATH + "/workspaces/sf/wmtsstores/demo/layers", xml, "text/xml");
+    }
+
+    /** POSTs the new WMTS layer with the given {@code enabled} and checks what the catalog stored */
+    private void assertEnabledAfterPost(Boolean posted, boolean expected) throws Exception {
+        assertThat(postWMTSLayerAsXML(posted), hasStatus(HttpStatus.CREATED));
+
+        WMTSLayerInfo resource = catalog.getResourceByName("sf", ANOTHER_LOCAL_NAME, WMTSLayerInfo.class);
+        assertNotNull(resource);
+        assertEquals("enabled", expected, resource.isEnabled());
+
+        LayerInfo layer = catalog.getLayerByName(new NameImpl("sf", ANOTHER_LOCAL_NAME));
+        assertNotNull(layer);
+        assertEquals("layer enabled", expected, layer.enabled());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledMissing() throws Exception {
+        assertEnabledAfterPost(null, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledTrue() throws Exception {
+        assertEnabledAfterPost(true, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledFalse() throws Exception {
+        assertEnabledAfterPost(false, false);
+    }
+
     @Test
     public void testGetAsXML() throws Exception {
         MockHttpServletResponse response =

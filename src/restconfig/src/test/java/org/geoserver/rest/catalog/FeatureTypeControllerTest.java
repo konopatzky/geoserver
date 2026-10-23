@@ -358,6 +358,43 @@ public class FeatureTypeControllerTest extends CatalogRESTTestSupport {
         assertEquals(405, response.getStatus());
     }
 
+    /** POSTs feature type pdsa of a new property store gs:pds as XML, leaving out {@code enabled} if it's null */
+    private MockHttpServletResponse postFeatureTypeAsXML(Boolean enabled) throws Exception {
+        addPropertyDataStore(false);
+        String xml = "<featureType><name>pdsa</name>"
+                + (enabled != null ? "<enabled>" + enabled + "</enabled>" : "")
+                + "</featureType>";
+        return postAsServletResponse(BASEPATH + "/workspaces/gs/datastores/pds/featuretypes", xml, "text/xml");
+    }
+
+    /** POSTs feature type pdsa with the given {@code enabled} and checks what the catalog stored */
+    private void assertEnabledAfterPost(Boolean posted, boolean expected) throws Exception {
+        assertEquals(201, postFeatureTypeAsXML(posted).getStatus());
+
+        FeatureTypeInfo resource = catalog.getFeatureTypeByName("gs", "pdsa");
+        assertNotNull(resource);
+        assertEquals("enabled", expected, resource.isEnabled());
+
+        LayerInfo layer = catalog.getLayerByName("gs:pdsa");
+        assertNotNull(layer);
+        assertEquals("layer enabled", expected, layer.enabled());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledMissing() throws Exception {
+        assertEnabledAfterPost(null, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledTrue() throws Exception {
+        assertEnabledAfterPost(true, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledFalse() throws Exception {
+        assertEnabledAfterPost(false, false);
+    }
+
     @Test
     public void testGetAsXML() throws Exception {
         Document dom = getAsDOM(BASEPATH + "/workspaces/sf/featuretypes/PrimitiveGeoFeature.xml");

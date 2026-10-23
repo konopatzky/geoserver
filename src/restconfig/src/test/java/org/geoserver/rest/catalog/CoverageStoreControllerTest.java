@@ -67,6 +67,13 @@ public class CoverageStoreControllerTest extends CatalogRESTTestSupport {
         getTestData().addDefaultRasterLayer(SystemTestData.TASMANIA_BM, getCatalog());
     }
 
+    @Before
+    public void removeEnabledCoverageStores() {
+        removeStore("wcs", "enabledMissing");
+        removeStore("wcs", "enabledTrue");
+        removeStore("wcs", "enabledFalse");
+    }
+
     @Test
     public void testGetAllOnMissingWorkspace() throws Exception {
         MockHttpServletResponse response =
@@ -340,6 +347,47 @@ public class CoverageStoreControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response = postAsServletResponse(
                 RestBaseController.ROOT_PATH + "/workspaces/wcs/coveragestores/BlueMarble", xml, "text/xml");
         assertEquals(405, response.getStatus());
+    }
+
+    /** POSTs a new WorldImage coverage store as XML, leaving out {@code enabled} if it's null */
+    private MockHttpServletResponse postCoverageStoreAsXML(String name, Boolean enabled) throws Exception {
+        File f = setupNewCoverageStore();
+        String xml = "<coverageStore>"
+                + "<name>"
+                + name
+                + "</name>"
+                + "<type>WorldImage</type>"
+                + "<url>file://"
+                + f.getAbsolutePath()
+                + "</url>"
+                + "<workspace>wcs</workspace>"
+                + (enabled != null ? "<enabled>" + enabled + "</enabled>" : "")
+                + "</coverageStore>";
+        return postAsServletResponse(RestBaseController.ROOT_PATH + "/workspaces/wcs/coveragestores", xml, "text/xml");
+    }
+
+    /** POSTs a new coverage store with the given {@code enabled} and checks what the catalog stored */
+    private void assertEnabledAfterPost(String name, Boolean posted, boolean expected) throws Exception {
+        assertEquals(201, postCoverageStoreAsXML(name, posted).getStatus());
+
+        CoverageStoreInfo store = catalog.getCoverageStoreByName("wcs", name);
+        assertNotNull(store);
+        assertEquals("enabled", expected, store.isEnabled());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledMissing() throws Exception {
+        assertEnabledAfterPost("enabledMissing", null, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledTrue() throws Exception {
+        assertEnabledAfterPost("enabledTrue", true, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledFalse() throws Exception {
+        assertEnabledAfterPost("enabledFalse", false, false);
     }
 
     @Test

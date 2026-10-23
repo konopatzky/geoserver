@@ -59,6 +59,14 @@ public class CoverageControllerTest extends CatalogRESTTestSupport {
         getTestData().addDefaultRasterLayer(SystemTestData.TASMANIA_BM, getCatalog());
     }
 
+    @Before
+    public void removePostedCoverages() {
+        removeLayer("wcs", "enabledMissing");
+        removeLayer("wcs", "enabledTrue");
+        removeLayer("wcs", "enabledFalse");
+        removeLayer("wcs", "enabledFalseWithSrs");
+    }
+
     @Test
     public void testGetAllByWorkspaceXML() throws Exception {
         Document dom = getAsDOM(RestBaseController.ROOT_PATH + "/workspaces/wcs/coverages.xml");
@@ -277,6 +285,47 @@ public class CoverageControllerTest extends CatalogRESTTestSupport {
                 xml,
                 "text/xml");
         assertEquals(405, response.getStatus());
+    }
+
+    /** POSTs a new coverage of the BlueMarble GeoTIFF as XML, with the given additional elements */
+    private MockHttpServletResponse postCoverageAsXML(String name, String elements) throws Exception {
+        String xml = "<coverage><name>" + name + "</name><nativeCoverageName>tazbm</nativeCoverageName>" + elements
+                + "</coverage>";
+        return postAsServletResponse(
+                ROOT_PATH + "/workspaces/wcs/coveragestores/BlueMarble/coverages", xml, "text/xml");
+    }
+
+    /** POSTs a new coverage with the given additional elements and checks the stored {@code enabled} */
+    private void assertEnabledAfterPost(String name, String elements, boolean expected) throws Exception {
+        assertEquals(201, postCoverageAsXML(name, elements).getStatus());
+
+        CoverageInfo resource = catalog.getCoverageByName("wcs", name);
+        assertNotNull(resource);
+        assertEquals("enabled", expected, resource.isEnabled());
+
+        LayerInfo layer = catalog.getLayerByName("wcs:" + name);
+        assertNotNull(layer);
+        assertEquals("layer enabled", expected, layer.enabled());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledMissing() throws Exception {
+        assertEnabledAfterPost("enabledMissing", "", true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledTrue() throws Exception {
+        assertEnabledAfterPost("enabledTrue", "<enabled>true</enabled>", true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledFalse() throws Exception {
+        assertEnabledAfterPost("enabledFalse", "<enabled>false</enabled>", false);
+    }
+
+    @Test // GEOS-12248, a body with more than the name is completed instead of built from scratch
+    public void testPostAsXMLEnabledFalseWithSrs() throws Exception {
+        assertEnabledAfterPost("enabledFalseWithSrs", "<enabled>false</enabled><srs>EPSG:4326</srs>", false);
     }
 
     @Test

@@ -32,6 +32,7 @@ import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.rest.RestBaseController;
 import org.geoserver.test.http.MockHttpClient;
 import org.geoserver.test.http.MockHttpResponse;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -69,6 +70,13 @@ public class WMTSStoreTest extends CatalogRESTTestSupport {
         cb.setStore(wmts);
         WMTSLayerInfo layer = cb.buildWMTSLayer(LAYER_NAME);
         catalog.add(layer);
+    }
+
+    @Before
+    public void removeEnabledStores() {
+        removeStore("sf", "enabledMissing");
+        removeStore("sf", "enabledTrue");
+        removeStore("sf", "enabledFalse");
     }
 
     @BeforeClass
@@ -280,6 +288,43 @@ public class WMTSStoreTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(RestBaseController.ROOT_PATH + "/workspaces/sf/wmtsstores/demo", xml, "text/xml");
         assertEquals(405, response.getStatus());
+    }
+
+    /** POSTs a new WMTS store as XML, leaving out {@code enabled} if it's null */
+    private MockHttpServletResponse postWMTSStoreAsXML(String name, Boolean enabled) throws Exception {
+        String xml = "<wmtsStore>"
+                + "<name>"
+                + name
+                + "</name>"
+                + "<capabilitiesURL>http://somehost/wmts?</capabilitiesURL>"
+                + "<workspace>sf</workspace>"
+                + (enabled != null ? "<enabled>" + enabled + "</enabled>" : "")
+                + "</wmtsStore>";
+        return postAsServletResponse(RestBaseController.ROOT_PATH + "/workspaces/sf/wmtsstores", xml, "text/xml");
+    }
+
+    /** POSTs a new WMTS store with the given {@code enabled} and checks what the catalog stored */
+    private void assertEnabledAfterPost(String name, Boolean posted, boolean expected) throws Exception {
+        assertThat(postWMTSStoreAsXML(name, posted), hasStatus(HttpStatus.CREATED));
+
+        WMTSStoreInfo store = catalog.getStoreByName(name, WMTSStoreInfo.class);
+        assertNotNull(store);
+        assertEquals("enabled", expected, store.isEnabled());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledMissing() throws Exception {
+        assertEnabledAfterPost("enabledMissing", null, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledTrue() throws Exception {
+        assertEnabledAfterPost("enabledTrue", true, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledFalse() throws Exception {
+        assertEnabledAfterPost("enabledFalse", false, false);
     }
 
     @Test

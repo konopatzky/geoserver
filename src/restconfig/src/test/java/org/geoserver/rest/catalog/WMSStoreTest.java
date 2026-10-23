@@ -75,6 +75,13 @@ public class WMSStoreTest extends CatalogRESTTestSupport {
         getCatalog().save(wms);
     }
 
+    @Before
+    public void removeEnabledStores() {
+        removeStore("sf", "enabledMissing");
+        removeStore("sf", "enabledTrue");
+        removeStore("sf", "enabledFalse");
+    }
+
     private static void configureDemoStore(WMSStoreInfo wms) {
         wms.setEnabled(true);
         wms.setCapabilitiesURL(capabilities);
@@ -290,6 +297,43 @@ public class WMSStoreTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(RestBaseController.ROOT_PATH + "/workspaces/sf/wmsstores/demo", xml, "text/xml");
         assertEquals(405, response.getStatus());
+    }
+
+    /** POSTs a new WMS store as XML, leaving out {@code enabled} if it's null */
+    private MockHttpServletResponse postWMSStoreAsXML(String name, Boolean enabled) throws Exception {
+        String xml = "<wmsStore>"
+                + "<name>"
+                + name
+                + "</name>"
+                + "<capabilitiesURL>http://somehost/wms?</capabilitiesURL>"
+                + "<workspace>sf</workspace>"
+                + (enabled != null ? "<enabled>" + enabled + "</enabled>" : "")
+                + "</wmsStore>";
+        return postAsServletResponse(RestBaseController.ROOT_PATH + "/workspaces/sf/wmsstores", xml, "text/xml");
+    }
+
+    /** POSTs a new WMS store with the given {@code enabled} and checks what the catalog stored */
+    private void assertEnabledAfterPost(String name, Boolean posted, boolean expected) throws Exception {
+        assertThat(postWMSStoreAsXML(name, posted), hasStatus(HttpStatus.CREATED));
+
+        WMSStoreInfo store = catalog.getStoreByName(name, WMSStoreInfo.class);
+        assertNotNull(store);
+        assertEquals("enabled", expected, store.isEnabled());
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledMissing() throws Exception {
+        assertEnabledAfterPost("enabledMissing", null, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledTrue() throws Exception {
+        assertEnabledAfterPost("enabledTrue", true, true);
+    }
+
+    @Test // GEOS-12248
+    public void testPostAsXMLEnabledFalse() throws Exception {
+        assertEnabledAfterPost("enabledFalse", false, false);
     }
 
     @Test
